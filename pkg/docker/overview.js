@@ -20,6 +20,7 @@
 define([
     "jquery",
     "base1/cockpit",
+    "./atomic-client",
     "./mustache",
     "./react",
     "./util",
@@ -29,7 +30,7 @@ define([
     "./bar",
     "./plot",
     "./flot"
-], function($, cockpit, Mustache, React, util, search_image, docker, storage, bar, plot) {
+], function($, cockpit, atomicClient, Mustache, React, util, run_image, search_image, docker, storage, bar, plot) {
     var _ = cockpit.gettext;
     var C_ = cockpit.gettext;
 
@@ -39,6 +40,18 @@ define([
     function init_overview (client) {
 
         var danger_enabled = false;
+
+        var service = cockpit.dbus("org.atomic");
+        var proxy = service.proxy("org.atomic", "/org/atomic/object");
+        var data = {};
+        proxy.wait(function () {
+          if(proxy.valid) {
+            var call = proxy.VulnerableInfo();
+            call.done(function(result) {
+              data = JSON.parse(result);
+            });
+          }
+        });
 
         function set_danger_enabled(val) {
             danger_enabled = val;
@@ -147,12 +160,22 @@ define([
                                   "", id, container, danger_enabled);
         }
 
+        function is_image_vulnerable(id) {
+
+        }
+
         function render_image(id, image) {
 
             // Docker ID can contain funny characters such as ":" so
             // we take care not to embed them into jQuery query
             // strings or HTML.
-
+            var is_vulnerable = false;
+            console.log(data);
+            if(id.slice(7) in data) {
+              if ("Vulnerable" in data[id.slice(7)]){
+                is_vulnerable = data[id.slice(7)]["Vulnerable"];
+              }
+            }
             var tr = $(document.getElementById(id));
 
             if (!image ||
@@ -184,6 +207,11 @@ define([
             }
 
             var row = tr.children("td");
+            if(is_vulnerable) {
+              for(var c = 0; c < row.length; c++){
+                row[c].style.backgroundColor = "red";
+              }
+            }
             $(row[0]).html(util.multi_line(image.RepoTags));
 
             /* if an image is older than two days, don't show the time */
